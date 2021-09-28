@@ -15,6 +15,148 @@ from matplotlib import pyplot as plt
 from UROP_const import *
 
 
+def rv2elorb(R, V, mu):
+    """
+    Programmed by: Claudio Bombardelli and Giulio Bau' (UPM & UniPD)
+    Date:                  6/03/2010
+    Revision:              1
+    Tested by:
+     Computes the inertial position and velocity given the orbital elements
+    
+     INPUT:     R = inertial position   (N x 3)
+                V = inertial velocity   (N x 3)
+                mu = grav constant  
+    
+     OUTPUT:   elorb = [a ecc inc raan a_per theta0]  (N x 6)
+           
+               where  a = pericenter radius     (N x 1)
+                      ecc = eccentricity        (N x 1)
+                      inc = inclination (rad)   (N x 1)
+                      raan = right ascension of ascending node (rad)  (N x 1)
+                      a_per = argument of perigee (rad)               (N x 1)
+                      theta0 = true anomaly at epoch                  (N x 1)
+    Adapted for Python by: Francesca Covella (Imperial College London)
+    Date:                  24/09/2021
+    """
+
+    # POSITION
+    # - vector
+    X = R[0] 
+    Y = R[1]
+    Z = R[2]
+    # - magnitiude
+    r = (X**2 + Y**2 + Z**2)**(0.5)
+    # - direction
+    urx = np.divide(X, r)
+    ury = np.divide(Y, r) 
+    urz = np.divide(Z, r) 
+
+    # VELOCITY
+    # - vector
+    Xd = V[0] 
+    Yd = V[1] 
+    Zd = V[2] 
+    # - magnitude
+    v = (Xd**2 + Yd**2 + Zd**2)**(0.5)
+    # ENERGY
+    En = 1/2*v**2 - mu/r
+
+    # ANGULAR MOMENTUM VECTOR
+    hx = Y*Zd - Z*Yd
+    hy = Z*Xd - X*Zd
+    hz = X*Yd - Y*Xd
+    hmod = (hx**2 + hy**2 + hz**2)**(1/2)
+    uhx = hx/hmod
+    uhy = hy/hmod
+    uhz = hz/hmod
+
+    # ECCENTRICITY VECTOR
+    vXhx = Yd*hz - Zd*hy
+    vXhy = Zd*hx - Xd*hz
+    vXhz = Xd*hy - Yd*hx
+
+    ex = vXhx/mu - X/r
+    ey = vXhy/mu - Y/r
+    ez = vXhz/mu - Z/r
+
+    # - vector
+    ex = (1 - (np.abs(ex) <= np.spacing(1) ))*ex
+    ey = (1 - (np.abs(ey) <= np.spacing(1) ))*ey
+    ez = (1 - (np.abs(ez) <= np.spacing(1) ))*ez
+    # - magnitude
+    emod = (ex**2 + ey**2 + ez**2)**(1/2)
+
+    # auxiliary quantities
+    cr1 = np.sign(emod)   # The ith element of cr1 is:
+                        # '0' if the orbit IS circular
+                        # '1' if the orbit IS NOT circular
+    cr2 = 1. - cr1     # The ith element of cr2 is
+                        # '1' if the orbit IS circular
+                        # '0' if the orbit IS NOT circular
+    emod_aux2 = emod + cr2
+
+    # - direction
+    # uex, uey, uez are equal to 0 if the orbit is circular
+    uex = ex/emod_aux2
+    uey = ey/emod_aux2
+    uez = ez/emod_aux2
+
+    # AUXILIARY QUANTITIES
+    eq1 = np.sign(1 - np.abs(uhz))   # The ith element of eq1 is:
+                                # '0' if the orbit IS equatorial
+                                # '1' if the orbit IS NOT equatorial
+    eq2 = 1 - eq1              # The ith element of eq2 is:
+                                # '1' if the the orbit IS equatorial 
+                                # '0' if the orbit IS NOT equatorial
+
+    # UNIT VECTOR NORMAL TO h AND e UNIT VECTORS
+    # It coincides with the scalar product of the unit vectors N (node line direction)
+    # and e multiplied by sin(i), where i is the inclination
+    # We are interested only in the third component
+    uhez = uhx*uey - uhy*uex
+
+    # UNIT VECTOR NORMAL TO h AND e UNIT VECTORS
+    # It coincides with the scalar product of the unit vectors N (node line direction)
+    # and e multiplied by sin(i), where i is the inclination
+    # We are interested only in the third component
+    uhrz = uhx*ury - uhy*urx
+
+    # COMPUTATION OF ORBITAL ELEMENTS
+    # If the orbit is EQUATORIAL we assume:
+    # - Omega = 0
+    # - omega = angle between the inertial axis X and the eccentricity vector
+
+    # If the orbit is CIRCULAR we assume:
+    # - omega = 0
+    # - nu    = angle between the node line and the position vector, if the
+    #           orbit is equatorial then nu is the angle between the inertial X
+    #           axis and the position vector
+
+    a = - mu/(2*En)   # semimajor axis
+
+    e = emod   # eccentricity
+
+    i = np.arctan2((uhx**2 + uhy**2)**(1/2), uhz)   # inclination
+
+    Omega = (np.arctan2(uhx, -uhy))*eq1   # right ascension of ascending node
+    Omega = 2*np.pi*(Omega < 0) + Omega
+
+    omega = eq1*(np.arctan2(uez, uhez)) + eq2*(np.arctan2(uey, uex))   # argument of pericenter
+    omega = 2*np.pi*(omega < 0) + omega
+
+    arg_lat_1 = np.arctan2(urz, uhrz)
+    arg_lat_1 = 2*np.pi*(arg_lat_1 < 0) + arg_lat_1
+    arg_lat_2 = np.arctan2(ury, urx)
+    arg_lat_2 = 2*np.pi*(arg_lat_2 < 0) + arg_lat_2
+
+    nu = eq1*(arg_lat_1-omega) + eq2*(arg_lat_2-omega)   # true anomaly
+    nu = 2*np.pi*(nu < 0) + nu
+
+    elorb = [a, e, i, Omega, omega, nu]   # NOTE: elorb: n_rows = N = size(R,1)
+                                        #              n_columns = 6
+    return elorb
+
+
 # Auxiliary func
 def state2orb(r0, v0, Gparam):
     """
@@ -83,14 +225,15 @@ def state2orb(r0, v0, Gparam):
     else :
         cos_true_anomaly = np.dot(e, r0)/(e_norm*np.linalg.norm(r0))
         if np.linalg.norm(cos_true_anomaly) >= 1:
+
             cos_true_anomaly = np.sign(cos_true_anomaly)
         true_anomaly = math.acos(cos_true_anomaly)
 
     u_r  = r0/np.linalg.norm(r0)
     if np.dot(v0, u_r) < 0:
+        print("past apogee")
         # past apogee
         true_anomaly = 2*np.pi - true_anomaly   
-        true_anomaly_r = math.radians(true_anomaly)
     return semi_major_axis, e_norm, inclination, RAAN, arg_perigee, true_anomaly
 
 
@@ -134,27 +277,42 @@ def orb2state(a, e_norm, i, RAAN, arg_perigee, true_anomaly):
     return r_orb, v_orb
 
 
-def Dromo2orbel(Lc, sigma, tau, zeta1, zeta2, zeta3, eta1, eta2, eta3, eta4):
+# Initialise P matrix, page 4, formula (4):
+def dromo2rv(Lc, sigma, tau, zeta1, zeta2, zeta3, eta1, eta2, eta3, eta4):
     """
-    conversion from DROMO elements to classical orbital elements
-    taken from page 15-16 of Urrutxua et al. paper 2015
+    If you want to have r,v non dimensional from dromo, let Lc be 1.
+    Dromo elements to cartesian representation of state vector (page 14)
+    Outputs: Dimensional components of position and velocity
     """
-    a = - Lc / (zeta3**2 * (zeta1**2 + zeta2**2 -1))
-    e_norm = math.sqrt(zeta1**2 + zeta2**2)
-    beta = np.arctan2(zeta2, zeta1)
-    i = 2*np.arccos(math.sqrt(eta3**2 + eta4**2))
-    RAAN = - np.arctan2(eta3, eta4) + np.arctan2(eta2, eta1)
-    omega_tilda = - np.arctan2(eta3, eta4) - np.arctan2(eta2, eta1)
-    omega = omega_tilda + beta
-    theta = sigma - beta
-    return a, e_norm, i, RAAN, omega, theta
+    s = 1 + zeta1 * np.cos(sigma) + zeta2 * np.sin(sigma)
+    alpha = (Lc / (zeta3**2 * s))
+    omegacLc = (math.sqrt(GMe/Lc**3) * Lc)
 
+    p11 = 1-2*(eta2**2 + eta3**2)
+    p12 = 2*eta1*eta2 - 2*eta4*eta3
+    p21 = 2*eta1*eta2 + 2*eta4*eta3
+    p22 = 1-2*(eta1**2 + eta3**2)
+    p31 = 2*eta1*eta3 - 2*eta4*eta2
+    p32 = 2*eta3*eta2 + 2*eta4*eta1
 
-# def Dromotime2time(tau):
-#     # time in s
-#     # page 14. from paper
-#     time = t0 + tau * math.sqrt(a0d**3/GMe)
-#     return time
+    x = alpha * ( p11*np.cos(sigma) + p12*np.sin(sigma) )
+    # x = np.round(x, 11)
+    y = alpha * ( p21*np.cos(sigma) + p22*np.sin(sigma) )
+    # y = np.round(y, 11)
+    z = alpha * ( p31*np.cos(sigma) + p32*np.sin(sigma) ) 
+    # z = np.round(z, 11)
+
+    V1 = -zeta3*(np.sin(sigma)+zeta2)
+    V2 =  zeta3*(np.cos(sigma)+zeta1)
+
+    xv = omegacLc * ( p11*V1 + p12*V2 )
+    # xv = np.round(xv, 11)
+    yv = omegacLc * ( p21*V1 + p22*V2 )
+    # yv = np.round(yv, 11)
+    zv = omegacLc * ( p31*V1 + p32*V2 ) 
+    # zv = np.round(zv, 11)
+
+    return x,y,z, xv,yv,zv 
 
 
 def plot2d_x_ys(x, ys, line_colors, h_label, v_label, line_styles, line_widths,\
@@ -192,9 +350,3 @@ def plot2d_x_ys(x, ys, line_colors, h_label, v_label, line_styles, line_widths,\
     plt.show()
 
 
-# For function testing, to be commented
-# def main():
-#     Dromo2orbel()
-
-# if __name__ == "__main__":
-#     main()
