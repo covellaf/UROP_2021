@@ -37,13 +37,19 @@ t0nd = t0 / math.sqrt((a0**3)/GMe) #[-]
 # Non-dimensional ICs
 S0 = [*r0nd, *v0nd]
 
-# Final time
+# # Final time
+# # Test - based on 50 orbits
+# T = 2*np.pi * np.sqrt(a0**3/GMe)  # orbital period
+# # print(f'the orbital period is {T} seconds for one orbit')
+# n_orb = 50
+# tf = T * n_orb
+
 tf = 288.12768941*24*3600                     # s
 tfnd  = tf / math.sqrt((a0**3)/GMe)           #[-]  (2*np.pi * 50:roughly 50 orbits)
 delta_t = 500                                 # s (max time beween consecutive integration points)
 delta_tnd  = delta_t / math.sqrt((a0**3)/GMe)          #[-]
 N = math.floor((tfnd-t0nd)/delta_tnd - 1)
-# print(N)
+print(N)
 t_eval = np.linspace(0, tfnd, N)               # duration of integration in seconds
 
 # Initial and final time
@@ -52,7 +58,7 @@ t_span = np.array([t0nd, tfnd])
 # Non-dimensionalise the parameters
 GMend = 1 # GMe * a0d / (a0d * GMe) 
 Rend  = Re / a0
-rlnd  = rl / (6*Re)
+rlnd  = rl / a0
 omega_lnd = omega_l * math.sqrt((a0**3)/GMe)
 GMlnd = GMl / GMe
 
@@ -110,6 +116,7 @@ def relacc_perturbed(t, S):
     r3 = np.array([ rlnd * math.sin(omega_lnd*t),
                     rlnd *  (- (math.sqrt(3)*math.cos(omega_lnd*t))/2) ,
                     rlnd *  (- math.cos(omega_lnd*t)/2)])
+
     xl = GMlnd * ( (r3[0] - x)/(la.norm(r3 - r)**3) - r3[0]/(la.norm(r3)**3) )
     yl = GMlnd * ( (r3[1] - y)/(la.norm(r3 - r)**3) - r3[1]/(la.norm(r3)**3) )
     zl = GMlnd * ( (r3[2] - z)/(la.norm(r3 - r)**3) - r3[2]/(la.norm(r3)**3) )
@@ -135,16 +142,13 @@ def main():
     DOP853 (still bad), RK23 (bad bad),
     Radau (kind of), BDF (what? no!!)
     """
-    St = solve_ivp(relacc_keplerian, t_span, S0, method="BDF", t_eval=t_eval, events=None, rtol=1e-3, atol=1e-8)
-
+    St = solve_ivp(relacc_perturbed, t_span, S0, method="RK45", t_eval=t_eval, events=None, rtol=1e-13, atol=1e-13)
     yout = St.y
-    # print(yout[:, 0])
     rnd = yout[:3, :]
     vnd = yout[-3:, :]
-    # print(rnd[:, 0])
 
     dim1, dim2 = np.shape(yout)
-    print(dim1, dim2)
+    # print(dim1, dim2)
 
     # Dimensionalise the output state
     r = np.empty((3, dim2))
@@ -152,22 +156,21 @@ def main():
     for col in range(dim2):
         r[:, col] = rnd[:, col] * a0
         v[:, col] = vnd[:, col] / math.sqrt(a0/GMe)
-    # print(r[:, 0], r[:, -1], v[:, -1])
+    print("initial and final state: ", r[:, 0], r[:, -1], v[:,0], v[:, -1])
 
     t_days = np.empty((1, dim2))
     for t, i in zip(t_eval, range(dim2)):
         t_days[0, i] = ( t*math.sqrt((a0**3)/GMe) )/(24*3600)
     
-    print(t_days[:, -1])
+    print("last day: ", t_days[:, -1])
 
     df_pos = pd.DataFrame(np.transpose(r), columns=["x", "y", "z"])
-    print(df_pos.head(10))
+    # print(df_pos.head(10))
 
-    
-    ax = plt.axes(projection='3d')
-    ax.plot3D(df_pos["x"], df_pos["y"], df_pos["y"], color = 'b', label = 'orbit')
-    # ax.set_aspect('equal', 'box')
-    plt.show()
+    # ax = plt.axes(projection='3d')
+    # ax.plot3D(df_pos["x"], df_pos["y"], df_pos["y"], color = 'b', label = 'orbit')
+    # # ax.set_aspect('equal', 'box')
+    # plt.show()
 
     # days = np.transpose(t_days)
     # fig, (ax1, ax2, ax3) = plt.subplots(3, sharex=True)

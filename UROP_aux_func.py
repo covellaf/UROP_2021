@@ -9,6 +9,7 @@ Auxiliary functions
 
 import math
 import numpy as np
+from numpy import linalg as la
 import pandas as pd
 from matplotlib import pyplot as plt
 # Other imports
@@ -296,23 +297,16 @@ def dromo2rv(Lc, sigma, tau, zeta1, zeta2, zeta3, eta1, eta2, eta3, eta4):
     p32 = 2*eta3*eta2 + 2*eta4*eta1
 
     x = alpha * ( p11*np.cos(sigma) + p12*np.sin(sigma) )
-    # x = np.round(x, 11)
     y = alpha * ( p21*np.cos(sigma) + p22*np.sin(sigma) )
-    # y = np.round(y, 11)
     z = alpha * ( p31*np.cos(sigma) + p32*np.sin(sigma) ) 
-    # z = np.round(z, 11)
 
     V1 = -zeta3*(np.sin(sigma)+zeta2)
     V2 =  zeta3*(np.cos(sigma)+zeta1)
 
     xv = omegacLc * ( p11*V1 + p12*V2 )
-    # xv = np.round(xv, 11)
     yv = omegacLc * ( p21*V1 + p22*V2 )
-    # yv = np.round(yv, 11)
     zv = omegacLc * ( p31*V1 + p32*V2 ) 
-    # zv = np.round(zv, 11)
-
-    return x,y,z, xv,yv,zv 
+    return x, y, z, xv, yv, zv 
 
 
 def plot2d_x_ys(x, ys, line_colors, h_label, v_label, line_styles, line_widths,\
